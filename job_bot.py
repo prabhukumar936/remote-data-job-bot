@@ -8,14 +8,14 @@ import json
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# 1. Target Core Technical Roles
+# Core Technical Roles
 KEYWORDS = [
     "data analyst", "data scientist", "analytics engineer", 
     "business intelligence", "bi engineer", "power bi", "tableau", 
     "python", "sql", "etl", "machine learning"
 ]
 
-# 2. Strict Scam/Gig/Spam Filter
+# Strict Scam/Gig/Spam Filter
 SPAM_TERMS = [
     "ai trainer", "generalist ai", "annotation", "annotator",
     "part-time", "hourly", "earn $", "earn €", "commission only",
@@ -67,7 +67,7 @@ def fetch_rss_verified(url, source_label):
                         "title": clean_title,
                         "link": link,
                         "source": source_label,
-                        "type": "Full-Time / Remote (Verified)"
+                        "type": "Full-Time / Remote"
                     })
     except Exception as e:
         print(f"Error fetching from {url}: {e}")
@@ -91,7 +91,7 @@ def fetch_remoteok_verified():
                     jobs.append({
                         "title": full_title,
                         "link": link,
-                        "source": "RemoteOK (Direct Tech)",
+                        "source": "RemoteOK",
                         "type": f"Full-Time ({loc or 'Remote'})"
                     })
     except Exception as e:
@@ -117,7 +117,7 @@ def main():
     jobs = fetch_trustable_jobs()
 
     portals = (
-        "<b>Trustable India Remote &amp; Full-Time Platforms:</b>\n"
+        "<b>🛡️ Trustable India Remote &amp; Full-Time Platforms:</b>\n"
         "• <a href='https://cutshort.io/search/jobs?q=data%20analyst&amp;remote=true'>Cutshort (Direct Founder &amp; HR Chat)</a>\n"
         "• <a href='https://www.naukri.com/data-analyst-jobs-in-bangalore-bengaluru'>Naukri Verified (Bengaluru/Remote)</a>\n"
         "• <a href='https://wellfound.com/jobs?role=data-analyst&amp;remote=true'>Wellfound (Funded Startups with Salary Transparency)</a>\n"
@@ -125,19 +125,18 @@ def main():
     )
 
     if not jobs:
-        msg = f"🛡️ <b>Verified Full-Time &amp; India Remote Alerts</b>\n\n{portals}All current openings filtered for strict legitimacy. Check the direct portals above!"
+        msg = f"🛡️ <b>Verified Full-Time &amp; India Remote Alerts</b>\n\n{portals}"
     else:
-        msg = f"🛡️ <b>Verified Full-Time &amp; Remote Openings ({len(jobs)} High-Trust Roles)</b>\n\n{portals}<b>Hand-Filtered Legitimate Openings:</b>\n\n"
+        msg = f"🛡️ <b>Verified Full-Time &amp; Remote Openings ({len(jobs)} Active Roles)</b>\n\n{portals}"
         for i, j in enumerate(jobs, 1):
             msg += (
                 f"{i}. <b>{j['title']}</b>\n"
-                f"   🏢 Source: {j['source']}\n"
-                f"   💼 {j['type']}\n"
+                f"   🏢 Source: {j['source']} | 💼 {j['type']}\n"
                 f"   👉 <a href='{j['link']}'>Apply on Official Site</a>\n\n"
             )
 
     send_telegram_message(msg)
-    print(f"Sent {len(jobs)} verified, trustable job openings successfully.")
+    print(f"Sent {len(jobs)} verified openings successfully.")
 
 if __name__ == "__main__":
     main()
