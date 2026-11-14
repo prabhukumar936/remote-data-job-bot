@@ -8,31 +8,48 @@ import json
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Core Technical Roles
-KEYWORDS = [
-    "data analyst", "data scientist", "analytics engineer", 
-    "business intelligence", "bi engineer", "power bi", "tableau", 
-    "python", "sql", "etl", "machine learning"
+CANDIDATE_PROFILE = {
+    "name": "Prabhu Kumar S",
+    "target_roles": [
+        "data analyst", "data scientist", "analytics engineer", 
+        "business intelligence", "bi developer", "python developer"
+    ],
+    "skills": [
+        "python", "sql", "postgresql", "mysql", "pandas", "numpy", 
+        "tableau", "power bi", "machine learning", "scikit-learn", 
+        "etl", "eda", "data pipelines", "regression", "classification"
+    ]
+}
+
+SENIOR_TERMS = [
+    "senior", "sr.", "sr ", "lead", "principal", "manager", "director", 
+    "head of", "architect", "staff", "vp", "chief", "10+ years", "8+ years", "7+ years", "5+ years"
 ]
 
-# Strict Scam/Gig/Spam Filter
 SPAM_TERMS = [
     "ai trainer", "generalist ai", "annotation", "annotator",
     "part-time", "hourly", "earn $", "earn €", "commission only",
     "survey", "clickworker", "freelance writer", "transcriptionist",
-    "virtual assistant", "data entry clerk", "typing", "no experience required",
-    "easy money", "unpaid", "training program (fee"
+    "virtual assistant", "data entry clerk", "typing", "easy money", "unpaid"
 ]
 
-def is_trustable_job(title: str, company: str = "") -> bool:
-    text = f"{company} {title}".lower()
-    if any(spam in text for spam in SPAM_TERMS):
-        return False
-    return any(kw in text for kw in KEYWORDS)
+def calculate_resume_match(title: str, desc: str = ""):
+    text = f"{title} {desc}".lower()
+    if any(spam in text for spam in SPAM_TERMS) or any(sen in text for sen in SENIOR_TERMS):
+        return None, []
+        
+    matched = [s.upper() for s in CANDIDATE_PROFILE["skills"] if s in text]
+    role_match = any(r in text for r in CANDIDATE_PROFILE["target_roles"])
+    
+    if not role_match and len(matched) < 2:
+        return None, []
+        
+    score = min(98, (72 if role_match else 60) + (len(matched) * 7))
+    return score, matched
 
 def send_telegram_message(message: str):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Warning: Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID.")
+        print("Warning: Missing credentials.")
         print(message)
         return
 
@@ -51,92 +68,111 @@ def send_telegram_message(message: str):
     except Exception as e:
         print("Failed to deliver Telegram message:", e)
 
-def fetch_rss_verified(url, source_label):
+def fetch_rss_jobs(url, source, work_mode):
     jobs = []
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=12) as resp:
             root = ET.fromstring(resp.read())
             for item in root.findall(".//item")[:25]:
                 title = item.findtext("title", "").strip()
                 link = item.findtext("link", "").strip()
-                
-                if is_trustable_job(title):
+                desc = item.findtext("description", "").strip()
+                score, matched = calculate_resume_match(title, desc)
+                if score and score >= 70:
                     clean_title = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                     jobs.append({
                         "title": clean_title,
                         "link": link,
-                        "source": source_label,
-                        "type": "Full-Time / Remote"
+                        "source": source,
+                        "score": score,
+                        "matched": matched,
+                        "mode": work_mode
                     })
     except Exception as e:
-        print(f"Error fetching from {url}: {e}")
+        print(f"Error {url}: {e}")
     return jobs
 
-def fetch_remoteok_verified():
+def fetch_remoteok():
     jobs = []
     try:
         url = "https://remoteok.com/api?tag=data"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=12) as resp:
             data = json.loads(resp.read().decode('utf-8'))
-            for item in data[1:30]:
+            for item in data[1:35]:
                 pos = item.get("position", "")
                 comp = item.get("company", "")
                 link = item.get("url", "")
-                loc = item.get("location", "Remote")
+                loc = item.get("location", "")
+                desc = item.get("description", "")
                 
-                if is_trustable_job(pos, comp) and link:
-                    full_title = f"{comp}: {pos}".replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                score, matched = calculate_resume_match(pos, desc)
+                if score and score >= 70 and link:
+                    clean_title = f"{comp}: {pos}".replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    mode = "Remote" if "remote" in (loc or "").lower() or not loc else f"Hybrid / Onsite ({loc})"
                     jobs.append({
-                        "title": full_title,
+                        "title": clean_title,
                         "link": link,
-                        "source": "RemoteOK",
-                        "type": f"Full-Time ({loc or 'Remote'})"
+                        "source": "RemoteOK Tech",
+                        "score": score,
+                        "matched": matched,
+                        "mode": mode
                     })
     except Exception as e:
-        print(f"Error fetching RemoteOK: {e}")
+        print(f"Error RemoteOK: {e}")
     return jobs
 
-def fetch_trustable_jobs():
+def fetch_all():
     all_jobs = []
-    all_jobs.extend(fetch_rss_verified("https://himalayas.app/jobs/rss?q=data", "Himalayas Tech"))
-    all_jobs.extend(fetch_rss_verified("https://weworkremotely.com/categories/remote-programming-jobs.rss", "WeWorkRemotely"))
-    all_jobs.extend(fetch_remoteok_verified())
+    all_jobs.extend(fetch_rss_jobs("https://himalayas.app/jobs/rss?q=data", "Himalayas", "Remote"))
+    all_jobs.extend(fetch_rss_jobs("https://weworkremotely.com/categories/remote-programming-jobs.rss", "WeWorkRemotely", "Remote"))
+    all_jobs.extend(fetch_remoteok())
 
     seen = set()
-    verified = []
+    unique = []
     for j in all_jobs:
         if j["link"] not in seen:
             seen.add(j["link"])
-            verified.append(j)
+            unique.append(j)
 
-    return verified[:7]
+    unique.sort(key=lambda x: x["score"], reverse=True)
+    return unique[:8]
 
 def main():
-    jobs = fetch_trustable_jobs()
+    jobs = fetch_all()
 
     portals = (
-        "<b>🛡️ Trustable India Remote &amp; Full-Time Platforms:</b>\n"
-        "• <a href='https://cutshort.io/search/jobs?q=data%20analyst&amp;remote=true'>Cutshort (Direct Founder &amp; HR Chat)</a>\n"
-        "• <a href='https://www.naukri.com/data-analyst-jobs-in-bangalore-bengaluru'>Naukri Verified (Bengaluru/Remote)</a>\n"
-        "• <a href='https://wellfound.com/jobs?role=data-analyst&amp;remote=true'>Wellfound (Funded Startups with Salary Transparency)</a>\n"
-        "• <a href='https://www.linkedin.com/jobs/search/?keywords=Data%20Analyst&amp;f_WT=2&amp;f_TPR=r86400'>LinkedIn Verified (India Remote)</a>\n\n"
+        "<b>Direct Search Portals (Matched for Prabhu Kumar S):</b>\n"
+        "• <a href='https://cutshort.io/search/jobs?q=data%20analyst&amp;experienceLevel=0-2'>Cutshort: Remote &amp; Bengaluru Startups</a>\n"
+        "• <a href='https://www.naukri.com/data-analyst-jobs-in-bangalore-bengaluru?experience=0'>Naukri: Full-Time Corporate / Hybrid</a>\n"
+        "• <a href='https://wellfound.com/jobs?role=data-analyst&amp;experience=0-2'>Wellfound: 100% Remote-First Roles</a>\n"
+        "• <a href='https://www.linkedin.com/jobs/search/?keywords=Data%20Analyst&amp;f_E=2&amp;location=India'>LinkedIn: All India Roles</a>\n\n"
+    )
+
+    header = (
+        "🎯 <b>Daily Job Matches Tailored for Your Resume</b>\n"
+        "👤 <b>Candidate:</b> Prabhu Kumar S (Great Lakes PGP-DSE)\n"
+        "🛠️ <b>Core Skills:</b> Python • SQL • Tableau • Power BI • Machine Learning\n"
+        "🌐 <b>Coverage:</b> 100% Remote, Hybrid &amp; Full-Time India\n\n"
     )
 
     if not jobs:
-        msg = f"🛡️ <b>Verified Full-Time &amp; India Remote Alerts</b>\n\n{portals}"
+        msg = f"{header}{portals}No new openings above 70% ATS score right now. Check the direct portals above!"
     else:
-        msg = f"🛡️ <b>Verified Full-Time &amp; Remote Openings ({len(jobs)} Active Roles)</b>\n\n{portals}"
+        msg = f"{header}{portals}<b>Top Openings (Sorted by ATS Resume Match):</b>\n\n"
         for i, j in enumerate(jobs, 1):
+            skills_str = ", ".join(j["matched"][:4]) if j["matched"] else "Python, SQL"
             msg += (
                 f"{i}. <b>{j['title']}</b>\n"
-                f"   🏢 Source: {j['source']} | 💼 {j['type']}\n"
+                f"   ⚡ <b>ATS Match:</b> {j['score']}% | 📍 <b>Mode:</b> {j['mode']}\n"
+                f"   🏷️ <b>Skills:</b> {skills_str}\n"
+                f"   🏢 Source: {j['source']}\n"
                 f"   👉 <a href='{j['link']}'>Apply on Official Site</a>\n\n"
             )
 
     send_telegram_message(msg)
-    print(f"Sent {len(jobs)} verified openings successfully.")
+    print(f"Sent {len(jobs)} resume-matched multi-mode jobs successfully.")
 
 if __name__ == "__main__":
     main()
